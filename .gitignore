@@ -1,0 +1,9 @@
+# Ignorar cache do Python
+__pycache__/
+*.pyc
+
+# Ignorar arquivos do PyInstaller
+build/
+dist/
+*.spec
+*.exe
