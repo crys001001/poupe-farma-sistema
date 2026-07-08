@@ -17,7 +17,7 @@ class FarmaciaController:
     def iniciar(self):
         self.view.mainloop()
 
-    # --- LÓGICA: CADASTRO E EDIÇÃO ---
+    #  LÓGICA: CADASTRO E EDIÇÃO 
     def buscar_cliente(self):
         telefone = self.view.get_dados_cadastro()['telefone']
         if not telefone: return
@@ -58,7 +58,7 @@ class FarmaciaController:
                 self.view.after(0, self.view.parar_carregamento)
         threading.Thread(target=task).start()
 
-    # --- LÓGICA: BASE DE CLIENTES ---
+    #  LÓGICA: BASE DE CLIENTES 
     def carregar_clientes(self):
         self.view.iniciar_carregamento()
         def task():
@@ -92,7 +92,7 @@ class FarmaciaController:
                 self.view.after(0, self.view.parar_carregamento)
         threading.Thread(target=task).start()
 
-    # --- LÓGICA: FILA DO MOTOBOY ---
+    # LÓGICA: FILA DO MOTOBOY 
     def lancar_entrega(self):
         busca, conteudo = self.view.get_dados_lancamento()
         if not busca or not conteudo: return
@@ -146,7 +146,7 @@ class FarmaciaController:
                 self.view.after(0, self.view.parar_carregamento)
         threading.Thread(target=task).start()
 
-    # --- LÓGICA: HISTÓRICO E FECHAMENTO EXCEL ---
+    #  LÓGICA: HISTÓRICO E FECHAMENTO EXCEL 
     def mudar_filtro_historico(self, escolha):
         self.carregar_historico()
 
@@ -188,7 +188,7 @@ class FarmaciaController:
                 self.view.after(0, self.view.parar_carregamento)
         threading.Thread(target=task).start()
 
-# === INÍCIO DO PROGRAMA ===
+#  INÍCIO DO PROGRAMA 
 if __name__ == "__main__":
     app = FarmaciaController()
     app.iniciar()

@@ -1,6 +1,6 @@
 import requests
 
-URL_API = "http://100.110.221.91:8000"
+URL_API = "api aqui"
 
 class FarmaciaAPI:
     @staticmethod
@@ -43,6 +43,6 @@ class FarmaciaAPI:
 
     @staticmethod
     def listar_historico(filtro="tudo"):
-        # Agora ele manda o filtro (Hoje, 7dias, etc) para a API
+        
         res = requests.get(f"{URL_API}/api/entregas/historico?filtro={filtro}", timeout=5)
         return res.json() if res.status_code == 200 else []

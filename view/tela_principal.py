@@ -4,7 +4,7 @@ import webbrowser
 import os
 import sys
 
-# --- CORES DA POUPE FARMA E TEMA MODERNO ---
+
 BRAND_GREEN = "#7AC142"
 BRAND_GREEN_HOVER = "#629B35"
 BRAND_RED = "#E31E24"
@@ -64,7 +64,7 @@ class JanelaSobre:
         ctk.CTkButton(frame_links, text="▶️ YouTube", font=("Arial", 13, "bold"), fg_color="#FF0000", hover_color="#CC0000", width=120, command=lambda: webbrowser.open(meu_youtube)).grid(row=0, column=2, padx=5)
         
         frase_venom = '"This is our new home. This is our heaven, and our hell.\nThis is Diamond Dogs."'
-        ctk.CTkLabel(self.janela, text=f"{frase_venom}\n- Venom Snake", font=("Consolas", 10, "italic"), text_color="gray").pack(side="bottom", pady=20)
+        ctk.CTkLabel(self.janela, text=f"{frase_venom}\n- Venom Snake", font=("Consolas", 12, "italic"), text_color="gray").pack(side="bottom", pady=20)
 
 
 class TelaFarmacia(ctk.CTk):
@@ -106,7 +106,7 @@ class TelaFarmacia(ctk.CTk):
         self.tabview.add("Entregas")
         self.tabview.add("Histórico")
 
-        # --- PROGRESS BAR ---
+        
         self.barra_carregamento = ctk.CTkProgressBar(self, mode="indeterminate", fg_color=CARD_COLOR, progress_color=BRAND_GREEN, height=8)
         self.barra_carregamento.pack(fill="x", side="bottom", padx=20, pady=(0, 15))
         self.barra_carregamento.set(0)
@@ -191,9 +191,9 @@ class TelaFarmacia(ctk.CTk):
                 janela.destroy()
         ctk.CTkButton(janela, text="Salvar Alteração", font=("Arial", 14, "bold"), fg_color=BRAND_GREEN, hover_color=BRAND_GREEN_HOVER, command=salvar).pack(pady=15)
 
-    # ==========================================
+    
     # ABA 1: CADASTRO
-    # ==========================================
+    
     def montar_aba_cadastro(self):
         aba = self.tabview.tab("Cadastro")
         container = ctk.CTkFrame(aba, fg_color="transparent")
@@ -229,9 +229,9 @@ class TelaFarmacia(ctk.CTk):
     def limpar_cadastro(self): self.entry_nome.delete(0, 'end'); self.entry_endereco.delete(0, 'end'); self.entry_numero.delete(0, 'end'); self.entry_complemento.delete(0, 'end')
     def mostrar_status_cadastro(self, msg, cor): self.lbl_status_cadastro.configure(text=msg, text_color=cor)
 
-    # ==========================================
+    
     # ABA 2: CLIENTES (COM ANIMAÇÃO)
-    # ==========================================
+    
     def montar_aba_clientes(self):
         aba = self.tabview.tab("Clientes")
         top_bar = ctk.CTkFrame(aba, fg_color="transparent")
@@ -269,9 +269,9 @@ class TelaFarmacia(ctk.CTk):
 
         animar(0)
 
-    # ==========================================
+    
     # ABA 3: ENTREGAS (COM ANIMAÇÃO)
-    # ==========================================
+    
     def montar_aba_entregas(self):
         aba = self.tabview.tab("Entregas")
         panel = ctk.CTkFrame(aba, fg_color=CARD_COLOR, corner_radius=15)
@@ -328,9 +328,9 @@ class TelaFarmacia(ctk.CTk):
             
         animar(0)
 
-    # ==========================================
+    
     # ABA 4: HISTÓRICO (COM ANIMAÇÃO)
-    # ==========================================
+    
     def montar_aba_historico(self):
         aba = self.tabview.tab("Histórico")
         top_hist = ctk.CTkFrame(aba, fg_color="transparent")

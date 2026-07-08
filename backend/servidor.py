@@ -129,7 +129,7 @@ def listar_historico(filtro: str = "tudo"):
     elif filtro == "30dias":
         where_clause += " AND data_criacao >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
         
-    # Adicionamos DATE_FORMAT para retornar a data bonitinha para o Excel
+    
     sql = f"""
         SELECT id, nome_cliente, telefone, endereco, conteudo, status, 
         DATE_FORMAT(data_criacao, '%d/%m/%Y %H:%i') as data_formatada 
@@ -139,7 +139,7 @@ def listar_historico(filtro: str = "tudo"):
     try:
         cursor.execute(sql)
     except:
-        # Fallback caso você esqueça de rodar o comando ALTER TABLE
+        
         cursor.execute("SELECT *, 'Sem Data' as data_formatada FROM entregas WHERE status IN ('Entregue', 'Cancelado') ORDER BY id DESC LIMIT 100")
         
     res = cursor.fetchall()
