@@ -1,6 +1,6 @@
 import requests
 
-URL_API = "api aqui"
+URL_API = "http://100.110.221.91:8000"
 
 class FarmaciaAPI:
     @staticmethod
@@ -20,11 +20,13 @@ class FarmaciaAPI:
 
     @staticmethod
     def excluir_cliente(telefone):
-        requests.delete(f"{URL_API}/api/clientes/{telefone}", timeout=5)
+        res = requests.delete(f"{URL_API}/api/clientes/{telefone}", timeout=5)
+        return res.status_code == 200
 
     @staticmethod
-    def lancar_entrega(busca, conteudo):
-        res = requests.post(f"{URL_API}/api/entregas", json={"cliente_busca": busca, "conteudo": conteudo}, timeout=5)
+    def lancar_entrega(cliente_busca, conteudo):
+        dados = {"cliente_busca": cliente_busca, "conteudo": conteudo}
+        res = requests.post(f"{URL_API}/api/entregas", json=dados, timeout=5)
         return res.status_code == 200
 
     @staticmethod
@@ -34,15 +36,16 @@ class FarmaciaAPI:
 
     @staticmethod
     def alterar_status_entrega(id_entrega, acao):
-        requests.put(f"{URL_API}/api/entregas/{id_entrega}/{acao}", timeout=5)
+        res = requests.put(f"{URL_API}/api/entregas/{id_entrega}/{acao}", timeout=5)
+        return res.status_code == 200
 
     @staticmethod
     def editar_conteudo_entrega(id_entrega, novo_conteudo):
-        res = requests.put(f"{URL_API}/api/entregas/{id_entrega}/editar", json={"conteudo": novo_conteudo}, timeout=5)
+        dados = {"conteudo": novo_conteudo}
+        res = requests.put(f"{URL_API}/api/entregas/{id_entrega}/editar", json=dados, timeout=5)
         return res.status_code == 200
 
     @staticmethod
     def listar_historico(filtro="tudo"):
-        
         res = requests.get(f"{URL_API}/api/entregas/historico?filtro={filtro}", timeout=5)
         return res.json() if res.status_code == 200 else []
