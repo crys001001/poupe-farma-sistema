@@ -1,9 +1,115 @@
-# Ignorar cache do Python
-__pycache__/
-*.pyc
+# ============================================================
+# PYTHON
+# ============================================================
 
-# Ignorar arquivos do PyInstaller
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+*.egg-info/
+.eggs/
+
+
+# ============================================================
+# AMBIENTES VIRTUAIS
+# ============================================================
+
+.venv/
+venv/
+env/
+ENV/
+
+
+# ============================================================
+# CREDENCIAIS E VARIÁVEIS DE AMBIENTE
+# ============================================================
+
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+*.pem
+*.key
+*.crt
+
+
+# ============================================================
+# LOGS E ARQUIVOS TEMPORÁRIOS
+# ============================================================
+
+*.log
+*.pid
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.swp
+*~
+
+logs/
+temp/
+tmp/
+
+
+# ============================================================
+# BACKUPS E EXPORTAÇÕES
+# ============================================================
+
+backups/
+backup/
+database/backups/
+
+*.sql.gz
+*.dump
+
+exports/
+relatorios/
+relatórios/
+
+*.csv
+*.pdf
+
+
+# ============================================================
+# PYINSTALLER E ARQUIVOS GERADOS
+# Os arquivos .spec permanecem no Git para reproduzir a build.
+# ============================================================
+
 build/
 dist/
-*.spec
+
 *.exe
+*.msi
+*.manifest
+
+
+# ============================================================
+# EDITORES E SISTEMA OPERACIONAL
+# ============================================================
+
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+# ============================================================
+# BANCOS LOCAIS DE TESTE
+# ============================================================
+
+*.db
+*.sqlite
+*.sqlite3

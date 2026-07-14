@@ -1,15 +1,12 @@
-
-
 [Unit]
 Description=API Poupe Farma - FastAPI
-After=network.target
+After=network-online.target docker.service
+Wants=network-online.target
 
 [Service]
-User=root
-
-# Substitua pelo caminho real onde a API está no seu servidor Linux
-
-WorkingDirectory=/root/api_farmacia
+Type=simple
+User=drajen
+WorkingDirectory=/home/drajen/api_farmacia
 ExecStart=/usr/bin/python3 -m uvicorn servidor:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=3

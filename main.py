@@ -1,187 +1,543 @@
-import threading
 import csv
+import logging
+import threading
+from pathlib import Path
+from tkinter import filedialog, messagebox
+
 from fpdf import FPDF
-from tkinter import filedialog
-from models.api_model import FarmaciaAPI
+
+from models.api_model import ErroAPI, FarmaciaAPI
+from view.config import formatar_endereco, formatar_telefone, texto_opcional
 from view.tela_principal import TelaFarmacia
 
+
+PASTA_LOG = Path.home() / "PoupeFarma"
+PASTA_LOG.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(
+    filename=PASTA_LOG / "poupe_farma.log",
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    encoding="utf-8",
+)
+logger = logging.getLogger("poupe_farma")
+
+
 class FarmaciaController:
+    COR_SUCESSO = "#7AC142"
+    COR_AVISO = "#E5B800"
+    COR_ERRO = "#D9534F"
+
+    FILTROS = {
+        "Hoje": "hoje",
+        "Últimos 7 dias": "7dias",
+        "Últimos 30 dias": "30dias",
+        "Tudo": "tudo",
+    }
+
     def __init__(self):
         self.api = FarmaciaAPI()
         self.view = TelaFarmacia(controller=self)
         self.clientes_cache = []
-        
-        # O .after(100) garante que a interface termine de desenhar ANTES de puxar do banco
-        # Isso mata qualquer chance daquele erro TclError ou AttributeError no arranque
-        self.view.after(100, self.carregar_clientes)
-        self.view.after(100, self.carregar_fila)
-        self.view.after(100, self.carregar_historico)
+        self._carregamentos_ativos = 0
 
-    def iniciar(self): 
+        self.view.after(150, self.carregar_clientes)
+        self.view.after(250, self.carregar_fila)
+        self.view.after(350, self.carregar_historico)
+
+    def iniciar(self):
         self.view.mainloop()
 
-    # --- CLIENTES ---
-    def buscar_cliente(self):
-        telefone = self.view.aba_cadastro.get_dados()['telefone']
-        if not telefone: return
-        self.view.iniciar_carregamento()
-        def task():
+    def _iniciar_carregamento(self):
+        self._carregamentos_ativos += 1
+        if self._carregamentos_ativos == 1:
+            self.view.iniciar_carregamento()
+
+    def _parar_carregamento(self):
+        self._carregamentos_ativos = max(0, self._carregamentos_ativos - 1)
+        if self._carregamentos_ativos == 0:
+            self.view.parar_carregamento()
+
+    def executar_thread(
+        self,
+        tarefa,
+        sucesso=None,
+        erro_status=None,
+        carregamento=False,
+    ):
+        if carregamento:
+            self._iniciar_carregamento()
+
+        def executar():
             try:
-                res = self.api.buscar_cliente(telefone)
-                if res and res.get("encontrado"):
-                    self.view.after(0, lambda: self.view.aba_cadastro.preencher(res['dados']))
-                else:
-                    self.view.after(0, lambda: self.view.aba_cadastro.mostrar_status("Novo cliente. Pode preencher.", "#E5B800"))
-            except: pass
-            finally: self.view.after(0, self.view.parar_carregamento)
-        threading.Thread(target=task).start()
+                resultado = tarefa()
+                self.view.after(0, lambda: self.view.atualizar_status_conexao(True))
+
+                if sucesso:
+                    self.view.after(0, lambda: sucesso(resultado))
+
+            except ErroAPI as erro:
+                mensagem = str(erro)
+                logger.warning("Erro da API: %s", mensagem)
+
+                if erro.status_code is None or erro.status_code >= 500:
+                    self.view.after(
+                        0,
+                        lambda: self.view.atualizar_status_conexao(False),
+                    )
+
+                self.view.after(
+                    0,
+                    lambda: self.mostrar_erro(mensagem, erro_status),
+                )
+
+            except Exception:
+                logger.exception("Erro inesperado")
+                self.view.after(
+                    0,
+                    lambda: self.mostrar_erro(
+                        "Ocorreu um erro inesperado. Consulte o log do sistema.",
+                        erro_status,
+                    ),
+                )
+
+            finally:
+                if carregamento:
+                    self.view.after(0, self._parar_carregamento)
+
+        threading.Thread(target=executar, daemon=True).start()
+
+    def mostrar_erro(self, mensagem, erro_status=None):
+        if erro_status:
+            erro_status(mensagem)
+
+        messagebox.showerror(
+            "Poupe Farma",
+            mensagem,
+            parent=self.view,
+        )
+
+    def mostrar_sucesso(self, mensagem):
+        messagebox.showinfo(
+            "Poupe Farma",
+            mensagem,
+            parent=self.view,
+        )
+
+    def obter_filtro(self):
+        escolha = self.view.aba_historico.combo_filtro.get()
+        return self.FILTROS.get(escolha, "hoje")
+
+    def obter_tipo_historico(self):
+        return self.view.aba_historico.combo_tipo.get()
+
+    @staticmethod
+    def texto_pdf(valor):
+        return str(valor or "").encode(
+            "latin-1",
+            errors="replace",
+        ).decode("latin-1")
+
+    def buscar_cliente(self):
+        dados = self.view.aba_cadastro.get_dados()
+        telefone = dados.get("telefone", "").strip()
+
+        if not telefone:
+            self.view.aba_cadastro.mostrar_status(
+                "Digite um telefone para pesquisar.",
+                self.COR_AVISO,
+            )
+            return
+
+        def sucesso(resposta):
+            if resposta.get("encontrado"):
+                self.view.aba_cadastro.preencher(resposta["dados"])
+                self.view.aba_cadastro.mostrar_status(
+                    "Cliente encontrado.",
+                    self.COR_SUCESSO,
+                )
+            else:
+                self.view.aba_cadastro.limpar_dados()
+                self.view.aba_cadastro.mostrar_status(
+                    "Novo cliente. Pode preencher.",
+                    self.COR_AVISO,
+                )
+
+        self.executar_thread(
+            lambda: self.api.buscar_cliente(telefone),
+            sucesso=sucesso,
+            erro_status=lambda msg: self.view.aba_cadastro.mostrar_status(
+                msg,
+                self.COR_ERRO,
+            ),
+            carregamento=True,
+        )
+
+    def _validar_cliente(self, dados):
+        erros = []
+        telefone = "".join(filter(str.isdigit, str(dados.get("telefone", ""))))
+        nome = str(dados.get("nome", "")).strip()
+
+        if not telefone:
+            erros.append("telefone")
+        elif len(telefone) not in (10, 11):
+            erros.append("telefone com DDD")
+
+        if not nome:
+            erros.append("nome")
+
+        return erros
 
     def salvar_cliente(self):
         dados = self.view.aba_cadastro.get_dados()
-        if not dados["telefone"] or not dados["nome"]: return
-        self.view.iniciar_carregamento()
-        def task():
-            try:
-                if self.api.salvar_cliente(dados):
-                    self.view.after(0, lambda: self.view.aba_cadastro.mostrar_status("Salvo com sucesso!", "#7AC142"))
-                    self.carregar_clientes()
-            except: pass
-            finally: self.view.after(0, self.view.parar_carregamento)
-        threading.Thread(target=task).start()
+        faltando = self._validar_cliente(dados)
+
+        if faltando:
+            self.view.aba_cadastro.mostrar_status(
+                "Preencha: " + ", ".join(faltando) + ".",
+                self.COR_ERRO,
+            )
+            return
+
+        def sucesso(_):
+            self.view.aba_cadastro.mostrar_status(
+                "Salvo com sucesso!",
+                self.COR_SUCESSO,
+            )
+            self.carregar_clientes()
+
+        self.executar_thread(
+            lambda: self.api.salvar_cliente(dados),
+            sucesso=sucesso,
+            erro_status=lambda msg: self.view.aba_cadastro.mostrar_status(
+                msg,
+                self.COR_ERRO,
+            ),
+            carregamento=True,
+        )
+
+    def salvar_edicao_cliente(self, dados, ao_concluir=None):
+        faltando = self._validar_cliente(dados)
+        if faltando:
+            self.mostrar_erro("Preencha: " + ", ".join(faltando) + ".")
+            return
+
+        def sucesso(_):
+            if ao_concluir:
+                ao_concluir()
+            self.carregar_clientes()
+            self.mostrar_sucesso("Cliente atualizado com sucesso.")
+
+        self.executar_thread(
+            lambda: self.api.salvar_cliente(dados),
+            sucesso=sucesso,
+            carregamento=True,
+        )
 
     def carregar_clientes(self):
-        def task():
-            try:
-                self.clientes_cache = self.api.listar_clientes()
-                self.view.after(0, lambda: self.view.aba_clientes.desenhar_lista(self.clientes_cache))
-            except: pass
-        threading.Thread(target=task).start()
+        def sucesso(clientes):
+            self.clientes_cache = clientes
+            self.view.aba_clientes.desenhar_lista(clientes)
+
+        self.executar_thread(self.api.listar_clientes, sucesso=sucesso)
 
     def filtrar_clientes(self, event=None):
-        t = self.view.aba_clientes.get_pesquisa()
-        filtrados = [c for c in self.clientes_cache if t in c['nome'].lower() or t in c['telefone']]
+        pesquisa = self.view.aba_clientes.get_pesquisa()
+        filtrados = [
+            cliente
+            for cliente in self.clientes_cache
+            if pesquisa in str(cliente.get("nome", "")).lower()
+            or pesquisa in str(cliente.get("telefone", ""))
+        ]
         self.view.aba_clientes.desenhar_lista(filtrados)
 
     def excluir_cliente(self, telefone):
-        self.view.iniciar_carregamento()
-        def task():
-            try:
-                self.api.excluir_cliente(telefone)
-                self.carregar_clientes()
-            except: pass
-            finally: self.view.after(0, self.view.parar_carregamento)
-        threading.Thread(target=task).start()
+        confirmar = messagebox.askyesno(
+            "Excluir cliente",
+            "Deseja realmente excluir este cliente?",
+            parent=self.view,
+        )
+        if not confirmar:
+            return
 
-    # --- ENTREGAS ---
+        def sucesso(_):
+            self.carregar_clientes()
+            self.mostrar_sucesso("Cliente excluído com sucesso.")
+
+        self.executar_thread(
+            lambda: self.api.excluir_cliente(telefone),
+            sucesso=sucesso,
+            carregamento=True,
+        )
+
     def lancar_entrega(self):
         busca, conteudo = self.view.aba_entregas.get_dados()
-        if not busca or not conteudo: return
-        self.view.iniciar_carregamento()
-        def task():
-            try:
-                if self.api.lancar_entrega(busca, conteudo):
-                    self.view.after(0, self.view.aba_entregas.limpar)
-                    self.view.after(0, lambda: self.view.aba_entregas.mostrar_status("Entrega Lançada!", "#7AC142"))
-                    self.carregar_fila()
-            except: pass
-            finally: self.view.after(0, self.view.parar_carregamento)
-        threading.Thread(target=task).start()
+
+        if not busca or not conteudo:
+            self.view.aba_entregas.mostrar_status(
+                "Informe o cliente e adicione ao menos um produto.",
+                self.COR_ERRO,
+            )
+            return
+
+        def sucesso(_):
+            self.view.aba_entregas.limpar()
+            self.view.aba_entregas.mostrar_status(
+                "Entrega lançada!",
+                self.COR_SUCESSO,
+            )
+            self.carregar_fila()
+
+        self.executar_thread(
+            lambda: self.api.lancar_entrega(busca, conteudo),
+            sucesso=sucesso,
+            erro_status=lambda msg: self.view.aba_entregas.mostrar_status(
+                msg,
+                self.COR_ERRO,
+            ),
+            carregamento=True,
+        )
 
     def carregar_fila(self):
-        def task():
-            try:
-                entregas = self.api.listar_pendentes()
-                self.view.after(0, lambda: self.view.aba_entregas.desenhar_fila(entregas))
-            except: pass
-        threading.Thread(target=task).start()
+        self.executar_thread(
+            self.api.listar_pendentes,
+            sucesso=self.view.aba_entregas.desenhar_fila,
+        )
 
     def alterar_status(self, id_entrega, acao):
-        def task():
-            try:
-                self.api.alterar_status_entrega(id_entrega, acao)
-                self.carregar_fila()
-                self.carregar_historico()
-            except: pass
-        threading.Thread(target=task).start()
+        mensagens = {
+            "entregue": "Confirmar que a entrega foi realizada?",
+            "cancelado": "Deseja realmente cancelar a entrega?",
+        }
 
-    def editar_conteudo_entrega(self, id_entrega, novo_conteudo):
-        def task():
-            try:
-                self.api.editar_conteudo_entrega(id_entrega, novo_conteudo)
-                self.carregar_fila()
-            except: pass
-        threading.Thread(target=task).start()
+        if acao not in mensagens:
+            self.mostrar_erro("Ação inválida para a entrega.")
+            return
 
-    # --- HISTÓRICO E EXPORTAÇÃO (EXCEL / PDF) ---
+        if not messagebox.askyesno(
+            "Confirmar ação",
+            mensagens[acao],
+            parent=self.view,
+        ):
+            return
+
+        def sucesso(_):
+            self.carregar_fila()
+            self.carregar_historico()
+
+        self.executar_thread(
+            lambda: self.api.alterar_status_entrega(id_entrega, acao),
+            sucesso=sucesso,
+            carregamento=True,
+        )
+
+    def editar_conteudo_entrega(
+        self,
+        id_entrega,
+        novo_conteudo,
+        ao_concluir=None,
+    ):
+        novo_conteudo = novo_conteudo.strip()
+        if not novo_conteudo:
+            self.mostrar_erro("O conteúdo não pode ficar vazio.")
+            return
+
+        def sucesso(_):
+            if ao_concluir:
+                ao_concluir()
+            self.carregar_fila()
+            self.mostrar_sucesso("Entrega atualizada.")
+
+        self.executar_thread(
+            lambda: self.api.editar_conteudo_entrega(
+                id_entrega,
+                novo_conteudo,
+            ),
+            sucesso=sucesso,
+            carregamento=True,
+        )
+
     def mudar_filtro_historico(self, escolha=None):
         self.carregar_historico()
 
     def carregar_historico(self):
-        # Proteção caso a interface ainda esteja sendo montada
-        if not hasattr(self.view, 'aba_historico'): return 
+        if not hasattr(self.view, "aba_historico"):
+            return
 
-        mapa = {"Hoje": "hoje", "Últimos 7 dias": "7dias", "Últimos 30 dias": "30dias", "Tudo": "tudo"}
-        filtro = mapa.get(self.view.aba_historico.combo_filtro.get(), "hoje")
-        tipo = self.view.aba_historico.combo_tipo.get()
+        filtro = self.obter_filtro()
+        tipo = self.obter_tipo_historico()
 
-        self.view.iniciar_carregamento()
-        def task():
-            try:
-                if tipo == "Histórico de Entregas":
-                    dados = self.api.listar_historico(filtro)
-                    self.view.after(0, lambda: self.view.aba_historico.desenhar_entregas(dados))
-                else:
-                    dados = self.api.listar_logs_clientes(filtro)
-                    self.view.after(0, lambda: self.view.aba_historico.desenhar_log(dados))
-            except: pass
-            finally: self.view.after(0, self.view.parar_carregamento)
-        threading.Thread(target=task).start()
+        def tarefa():
+            if tipo == "Histórico de Entregas":
+                return "entregas", self.api.listar_historico(filtro)
+            return "clientes", self.api.listar_logs_clientes(filtro)
+
+        def sucesso(resultado):
+            categoria, dados = resultado
+            if categoria == "entregas":
+                self.view.aba_historico.desenhar_entregas(dados)
+            else:
+                self.view.aba_historico.desenhar_log(dados)
+
+        self.executar_thread(tarefa, sucesso=sucesso, carregamento=True)
 
     def exportar_excel(self):
-        tipo = self.view.aba_historico.combo_tipo.get()
-        filtro = {"Hoje": "hoje", "Últimos 7 dias": "7dias", "Últimos 30 dias": "30dias", "Tudo": "tudo"}[self.view.aba_historico.combo_filtro.get()]
-        caminho = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("Excel CSV", "*.csv")], title="Salvar Excel")
-        if not caminho: return 
-        
-        def task():
-            try:
-                dados = self.api.listar_historico(filtro) if tipo == "Histórico de Entregas" else self.api.listar_logs_clientes(filtro)
-                with open(caminho, mode='w', newline='', encoding='utf-8-sig') as arquivo:
-                    escritor = csv.writer(arquivo, delimiter=';')
-                    if tipo == "Histórico de Entregas":
-                        escritor.writerow(['ID_Pedido', 'Cliente', 'Telefone', 'Endereco', 'Mercadoria', 'Status', 'Data'])
-                        for d in dados: escritor.writerow([d['id'], d['nome_cliente'], d['telefone'], d['endereco'], d['conteudo'], d['status'], d.get('data_formatada', '')])
-                    else:
-                        escritor.writerow(['Nome', 'Telefone', 'Endereco', 'Desejo_Cliente', 'Data de Cadastro'])
-                        for d in dados: escritor.writerow([d['nome'], d['telefone'], d['endereco'], d.get('produto_desejo',''), d.get('data_formatada', '')])
-            except: pass
-        threading.Thread(target=task).start()
+        tipo = self.obter_tipo_historico()
+        filtro = self.obter_filtro()
+        caminho = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("Arquivo CSV", "*.csv")],
+            title="Salvar relatório",
+            parent=self.view,
+        )
+        if not caminho:
+            return
+
+        def tarefa():
+            dados = (
+                self.api.listar_historico(filtro)
+                if tipo == "Histórico de Entregas"
+                else self.api.listar_logs_clientes(filtro)
+            )
+
+            with open(caminho, "w", newline="", encoding="utf-8-sig") as arquivo:
+                escritor = csv.writer(arquivo, delimiter=";")
+
+                if tipo == "Histórico de Entregas":
+                    escritor.writerow(
+                        [
+                            "ID",
+                            "Cliente",
+                            "Telefone",
+                            "Endereço",
+                            "Mercadoria",
+                            "Status",
+                            "Data",
+                        ]
+                    )
+                    for item in dados:
+                        escritor.writerow(
+                            [
+                                item.get("id", ""),
+                                item.get("nome_cliente", ""),
+                                item.get("telefone", ""),
+                                item.get("endereco", ""),
+                                item.get("conteudo", ""),
+                                item.get("status", ""),
+                                item.get("data_formatada", ""),
+                            ]
+                        )
+                else:
+                    escritor.writerow(
+                        [
+                            "Nome",
+                            "Telefone",
+                            "Endereço",
+                            "Número",
+                            "Bairro",
+                            "Complemento",
+                            "Desejo",
+                            "Data",
+                        ]
+                    )
+                    for item in dados:
+                        escritor.writerow(
+                            [
+                                item.get("nome", ""),
+                                item.get("telefone", ""),
+                                item.get("endereco", ""),
+                                item.get("numero", ""),
+                                item.get("bairro", ""),
+                                item.get("complemento", ""),
+                                item.get("produto_desejo", ""),
+                                item.get("data_formatada", ""),
+                            ]
+                        )
+            return caminho
+
+        self.executar_thread(
+            tarefa,
+            sucesso=lambda arquivo: self.mostrar_sucesso(
+                f"Relatório salvo em:\n\n{arquivo}"
+            ),
+            carregamento=True,
+        )
 
     def exportar_pdf(self):
-        tipo = self.view.aba_historico.combo_tipo.get()
-        filtro = {"Hoje": "hoje", "Últimos 7 dias": "7dias", "Últimos 30 dias": "30dias", "Tudo": "tudo"}[self.view.aba_historico.combo_filtro.get()]
-        caminho = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF", "*.pdf")], title="Salvar PDF")
-        if not caminho: return 
-        
-        def task():
-            try:
-                dados = self.api.listar_historico(filtro) if tipo == "Histórico de Entregas" else self.api.listar_logs_clientes(filtro)
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 16)
-                pdf.cell(200, 10, txt=f"Relatorio: {tipo}", ln=True, align='C')
-                pdf.set_font("Arial", size=10)
-                
-                for d in dados:
-                    if tipo == "Histórico de Entregas":
-                        texto = f"[{d.get('data_formatada','')}] #{d['id']} - {d['nome_cliente']} | Status: {d['status']} | Itens: {d['conteudo']}"
-                    else:
-                        texto = f"[{d.get('data_formatada','')}] Cliente: {d['nome']} | Tel: {d['telefone']} | Faltou: {d.get('produto_desejo','')}"
-                    pdf.multi_cell(0, 10, txt=texto)
-                pdf.output(caminho)
-            except Exception as e: print("Erro PDF:", e)
-        threading.Thread(target=task).start()
+        tipo = self.obter_tipo_historico()
+        filtro = self.obter_filtro()
+        caminho = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("Documento PDF", "*.pdf")],
+            title="Salvar relatório",
+            parent=self.view,
+        )
+        if not caminho:
+            return
+
+        def tarefa():
+            dados = (
+                self.api.listar_historico(filtro)
+                if tipo == "Histórico de Entregas"
+                else self.api.listar_logs_clientes(filtro)
+            )
+
+            pdf = FPDF()
+            pdf.set_auto_page_break(auto=True, margin=15)
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 16)
+            pdf.cell(
+                0,
+                10,
+                self.texto_pdf(f"Relatório: {tipo}"),
+                ln=True,
+                align="C",
+            )
+            pdf.ln(5)
+            pdf.set_font("Arial", size=10)
+
+            if not dados:
+                pdf.multi_cell(0, 8, "Nenhum registro encontrado.")
+
+            for item in dados:
+                if tipo == "Histórico de Entregas":
+                    texto = (
+                        f"[{item.get('data_formatada', '')}] "
+                        f"Pedido #{item.get('id', '')}\n"
+                        f"Cliente: {item.get('nome_cliente', '')}\n"
+                        f"Telefone: {formatar_telefone(item.get('telefone', ''))}\n"
+                        f"Endereço: {texto_opcional(item.get('endereco'), 'Não informado')}\n"
+                        f"Status: {item.get('status', '')}\n"
+                        f"Itens: {item.get('conteudo', '')}"
+                    )
+                else:
+                    texto = (
+                        f"[{item.get('data_formatada', '')}] "
+                        f"Cliente: {item.get('nome', '')}\n"
+                        f"Telefone: {formatar_telefone(item.get('telefone', ''))}\n"
+                        f"Endereço: {formatar_endereco(item)}\n"
+                        f"Desejo: {item.get('produto_desejo', '')}"
+                    )
+
+                pdf.multi_cell(0, 7, self.texto_pdf(texto))
+                pdf.ln(3)
+
+            pdf.output(caminho)
+            return caminho
+
+        self.executar_thread(
+            tarefa,
+            sucesso=lambda arquivo: self.mostrar_sucesso(
+                f"PDF salvo em:\n\n{arquivo}"
+            ),
+            carregamento=True,
+        )
+
 
 if __name__ == "__main__":
-    app = FarmaciaController()
-    app.iniciar()
+    try:
+        app = FarmaciaController()
+        app.iniciar()
+    except Exception:
+        logger.exception("Erro fatal ao iniciar o sistema.")
+        raise
