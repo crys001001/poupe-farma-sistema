@@ -1,1 +1,1 @@
-"""Interface gráfica do Poupe Farma."""
+"""Interface gráfica do Sistema de Cadastro."""

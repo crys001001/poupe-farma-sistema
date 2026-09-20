@@ -1,10 +1,12 @@
 import customtkinter as ctk
 
 from view.config import (
+    BORDER_COLOR,
     BRAND_GREEN,
     BRAND_GREEN_HOVER,
     BRAND_RED,
     CARD_COLOR,
+    FONT_FAMILY,
     INPUT_BG,
     TEXT_MUTED,
     abrir_whatsapp,
@@ -31,15 +33,17 @@ class AbaEntregas(ctk.CTkFrame):
             width=800,
             fg_color=CARD_COLOR,
             corner_radius=15,
+            border_width=1,
+            border_color=BORDER_COLOR,
         )
-        lancamento.pack(pady=(25, 15), padx=40)
+        lancamento.pack(pady=(12, 14), padx=30, fill="x")
 
         ctk.CTkLabel(
             lancamento,
             text="NOVA ENTREGA",
-            font=("Arial", 12, "bold"),
-            text_color=TEXT_MUTED,
-        ).pack(anchor="w", padx=30, pady=(20, 0))
+            font=(FONT_FAMILY, 11, "bold"),
+            text_color=BRAND_GREEN,
+        ).pack(anchor="w", padx=30, pady=(18, 0))
 
         self.entry_busca = criar_input(
             lancamento,
@@ -71,31 +75,49 @@ class AbaEntregas(ctk.CTkFrame):
             text="Adicionar",
             width=140,
             height=50,
-            font=("Arial", 16, "bold"),
+            font=(FONT_FAMILY, 16, "bold"),
             fg_color="#444444",
             hover_color="#333333",
             command=self.adicionar_item,
         ).pack(side="right")
 
-        self.box_itens = ctk.CTkFrame(
+        cabecalho_itens = ctk.CTkFrame(lancamento, fg_color="transparent")
+        cabecalho_itens.pack(fill="x", padx=30, pady=(10, 2))
+        ctk.CTkLabel(
+            cabecalho_itens,
+            text="ITENS DO PEDIDO",
+            font=(FONT_FAMILY, 11, "bold"),
+            text_color=TEXT_MUTED,
+        ).pack(side="left")
+        self.lbl_total_itens = ctk.CTkLabel(
+            cabecalho_itens,
+            text="0 itens",
+            font=(FONT_FAMILY, 11),
+            text_color=TEXT_MUTED,
+        )
+        self.lbl_total_itens.pack(side="right")
+
+        self.box_itens = ctk.CTkScrollableFrame(
             lancamento,
             fg_color=INPUT_BG,
-            height=70,
-            corner_radius=8,
+            height=82,
+            corner_radius=10,
+            border_width=1,
+            border_color=BORDER_COLOR,
         )
-        self.box_itens.pack(fill="x", padx=30, pady=10)
-        self.box_itens.pack_propagate(False)
+        self.box_itens.pack(fill="x", padx=30, pady=(2, 8))
         self._desenhar_itens()
 
-        ctk.CTkButton(
+        self.btn_lancar = ctk.CTkButton(
             lancamento,
             text="Lançar Entrega",
             command=self.controller.lancar_entrega,
             height=55,
-            font=("Arial", 18, "bold"),
+            font=(FONT_FAMILY, 18, "bold"),
             fg_color=BRAND_GREEN,
             hover_color=BRAND_GREEN_HOVER,
-        ).pack(pady=(5, 20), padx=30, fill="x")
+        )
+        self.btn_lancar.pack(pady=(4, 8), padx=30, fill="x")
 
         self.lbl_status = ctk.CTkLabel(
             self,
@@ -103,17 +125,19 @@ class AbaEntregas(ctk.CTkFrame):
             height=34,
             corner_radius=8,
             text_color="white",
-            font=("Arial", 13, "bold"),
+            font=(FONT_FAMILY, 13, "bold"),
         )
+        self.lbl_status.pack(fill="x", padx=30, pady=(0, 16))
 
         topo = ctk.CTkFrame(self, fg_color="transparent")
         topo.pack(fill="x", padx=40)
 
-        ctk.CTkLabel(
+        self.lbl_pendentes = ctk.CTkLabel(
             topo,
-            text="Pedidos Pendentes",
-            font=("Arial", 18, "bold"),
-        ).pack(side="left")
+            text="Pedidos pendentes",
+            font=(FONT_FAMILY, 18, "bold"),
+        )
+        self.lbl_pendentes.pack(side="left")
 
         ctk.CTkButton(
             topo,
@@ -143,8 +167,16 @@ class AbaEntregas(ctk.CTkFrame):
             self.mostrar_status("Informe o nome do produto.", BRAND_RED)
             return
 
-        if not quantidade.isdigit() or int(quantidade) <= 0:
-            self.mostrar_status("Informe uma quantidade válida.", BRAND_RED)
+        if not quantidade.isdigit() or not (1 <= int(quantidade) <= 999):
+            self.mostrar_status("Informe uma quantidade entre 1 e 999.", BRAND_RED)
+            return
+
+        if len(produto) > 120:
+            self.mostrar_status("O nome do produto deve ter até 120 caracteres.", BRAND_RED)
+            return
+
+        if len(self.itens_carrinho) >= 50:
+            self.mostrar_status("O pedido atingiu o limite de 50 itens.", BRAND_RED)
             return
 
         self.itens_carrinho.append(f"{int(quantidade)}x {produto}")
@@ -163,39 +195,45 @@ class AbaEntregas(ctk.CTkFrame):
         for widget in self.box_itens.winfo_children():
             widget.destroy()
 
+        quantidade = len(self.itens_carrinho)
+        self.lbl_total_itens.configure(
+            text=f"{quantidade} item" if quantidade == 1 else f"{quantidade} itens"
+        )
+
         if not self.itens_carrinho:
             ctk.CTkLabel(
                 self.box_itens,
                 text="Nenhum produto adicionado.",
                 text_color=TEXT_MUTED,
-            ).pack(pady=22)
+                font=(FONT_FAMILY, 13),
+            ).pack(pady=18)
             return
 
         for index, texto in enumerate(self.itens_carrinho):
-            badge = ctk.CTkFrame(
+            item = ctk.CTkFrame(
                 self.box_itens,
-                fg_color="#333333",
-                border_width=1,
-                border_color="#555555",
-                corner_radius=6,
+                fg_color="#29352E",
+                corner_radius=8,
             )
-            badge.pack(side="left", padx=5, pady=10)
+            item.pack(fill="x", padx=4, pady=3)
 
             ctk.CTkLabel(
-                badge,
+                item,
                 text=texto,
-                font=("Arial", 12),
-            ).pack(side="left", padx=(10, 4), pady=5)
+                font=(FONT_FAMILY, 13),
+                anchor="w",
+            ).pack(side="left", padx=10, pady=6, fill="x", expand=True)
 
             ctk.CTkButton(
-                badge,
-                text="×",
-                width=24,
-                height=24,
+                item,
+                text="Remover",
+                width=70,
+                height=28,
                 fg_color="transparent",
-                hover_color="#555555",
+                hover_color="#4A3434",
+                text_color="#FF8585",
                 command=lambda i=index: self.remover_item(i),
-            ).pack(side="left", padx=(0, 4))
+            ).pack(side="right", padx=6, pady=3)
 
     def get_dados(self):
         return (
@@ -218,16 +256,14 @@ class AbaEntregas(ctk.CTkFrame):
                 pass
 
         if not mensagem:
-            self.lbl_status.place_forget()
+            self.lbl_status.configure(text="", fg_color="transparent")
             return
 
         self.lbl_status.configure(text=mensagem, fg_color=cor)
-        self.lbl_status.place(relx=0.5, rely=0.5, anchor="center")
-        self.lbl_status.lift()
 
         self._status_after = self.after(
             2500,
-            self.lbl_status.place_forget,
+            lambda: self.lbl_status.configure(text="", fg_color="transparent"),
         )
 
     def abrir_detalhes(self, pedido):
@@ -244,14 +280,14 @@ class AbaEntregas(ctk.CTkFrame):
         ctk.CTkLabel(
             topo,
             text=f"PEDIDO #{pedido.get('id', '')}",
-            font=("Arial", 12, "bold"),
+            font=(FONT_FAMILY, 12, "bold"),
             text_color=BRAND_GREEN,
         ).pack(anchor="w")
 
         ctk.CTkLabel(
             topo,
             text=pedido.get("nome_cliente") or "Cliente não informado",
-            font=("Arial", 24, "bold"),
+            font=(FONT_FAMILY, 24, "bold"),
         ).pack(anchor="w", pady=(3, 0))
 
         contato = ctk.CTkFrame(
@@ -273,14 +309,14 @@ class AbaEntregas(ctk.CTkFrame):
         ctk.CTkLabel(
             textos,
             text="TELEFONE",
-            font=("Arial", 10, "bold"),
+            font=(FONT_FAMILY, 10, "bold"),
             text_color=TEXT_MUTED,
         ).pack(anchor="w")
 
         ctk.CTkLabel(
             textos,
             text=formatar_telefone(pedido.get("telefone", "")),
-            font=("Arial", 16, "bold"),
+            font=(FONT_FAMILY, 16, "bold"),
         ).pack(anchor="w", pady=(2, 0))
 
         ctk.CTkButton(
@@ -333,7 +369,7 @@ class AbaEntregas(ctk.CTkFrame):
         ctk.CTkLabel(
             card,
             text=f"Editar pedido #{pedido.get('id', '')}",
-            font=("Arial", 23, "bold"),
+            font=(FONT_FAMILY, 23, "bold"),
             text_color=BRAND_GREEN,
         ).pack(pady=(23, 4))
 
@@ -345,7 +381,7 @@ class AbaEntregas(ctk.CTkFrame):
             card,
             text="",
             text_color=BRAND_RED,
-            font=("Arial", 12, "bold"),
+            font=(FONT_FAMILY, 12, "bold"),
         )
         lbl_erro.pack()
 
@@ -404,11 +440,20 @@ class AbaEntregas(ctk.CTkFrame):
         for widget in self.scroll_fila.winfo_children():
             widget.destroy()
 
+        quantidade = len(entregas)
+        self.lbl_pendentes.configure(
+            text=(
+                f"{quantidade} pedido pendente"
+                if quantidade == 1
+                else f"{quantidade} pedidos pendentes"
+            )
+        )
+
         if not entregas:
             ctk.CTkLabel(
                 self.scroll_fila,
                 text="Nenhuma entrega pendente.",
-                font=("Arial", 16),
+                font=(FONT_FAMILY, 16),
                 text_color=TEXT_MUTED,
             ).pack(pady=60)
             return
@@ -422,6 +467,8 @@ class AbaEntregas(ctk.CTkFrame):
                 self.scroll_fila,
                 fg_color=CARD_COLOR,
                 corner_radius=10,
+                border_width=1,
+                border_color=BORDER_COLOR,
             )
             card.pack(fill="x", pady=6, padx=10)
 
@@ -446,19 +493,22 @@ class AbaEntregas(ctk.CTkFrame):
                 info,
                 text=(
                     f"#{entrega.get('id', '')} - "
-                    f"{entrega.get('nome_cliente', '')}  |  "
-                    f"{formatar_telefone(entrega.get('telefone', ''))}"
+                    f"{entrega.get('nome_cliente', '')}  •  "
+                    f"{formatar_telefone(entrega.get('telefone', ''))}  •  "
+                    f"{entrega.get('data_formatada', '')}"
                 ),
-                font=("Arial", 16, "bold"),
+                font=(FONT_FAMILY, 16, "bold"),
                 anchor="w",
             ).pack(fill="x")
 
             ctk.CTkLabel(
                 info,
                 text=f"Itens: {entrega.get('conteudo', '')}",
-                font=("Arial", 15),
+                font=(FONT_FAMILY, 14),
                 text_color=TEXT_MUTED,
                 anchor="w",
+                justify="left",
+                wraplength=620,
             ).pack(fill="x", pady=(5, 0))
 
             botoes = ctk.CTkFrame(card, fg_color="transparent")

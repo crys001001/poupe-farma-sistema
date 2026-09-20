@@ -5,19 +5,24 @@ import webbrowser
 import customtkinter as ctk
 
 
-APP_NAME = "Poupe Farma"
-APP_VERSION = "0.9.1"
+APP_NAME = "Sistema de Cadastro"
+APP_VERSION = "1.2.0"
 
-BRAND_GREEN = "#7AC142"
-BRAND_GREEN_HOVER = "#629B35"
-BRAND_RED = "#E31E24"
-BRAND_RED_HOVER = "#B9181D"
-BRAND_YELLOW = "#E5B800"
+BRAND_GREEN = "#72C746"
+BRAND_GREEN_HOVER = "#5AA535"
+BRAND_RED = "#E05252"
+BRAND_RED_HOVER = "#B93D3D"
+BRAND_YELLOW = "#E7B93F"
 
-BG_COLOR = "#121212"
-CARD_COLOR = "#1E1E1E"
-INPUT_BG = "#2A2A2A"
-TEXT_MUTED = "#AAAAAA"
+BG_COLOR = "#0B100D"
+SIDEBAR_COLOR = "#111713"
+CARD_COLOR = "#161E19"
+CARD_HOVER = "#1B2720"
+INPUT_BG = "#202A24"
+BORDER_COLOR = "#2C3931"
+TEXT_COLOR = "#F3F7F4"
+TEXT_MUTED = "#9BA9A0"
+FONT_FAMILY = "Segoe UI"
 
 
 def resource_path(relative_path):
@@ -29,16 +34,17 @@ def resource_path(relative_path):
     return os.path.join(base, relative_path)
 
 
-def criar_input(master, placeholder, width):
+def criar_input(master, placeholder, width, *, height=48):
     return ctk.CTkEntry(
         master,
         placeholder_text=placeholder,
         width=width,
-        height=50,
-        font=("Arial", 16),
+        height=height,
+        font=(FONT_FAMILY, 15),
         fg_color=INPUT_BG,
-        border_width=0,
-        corner_radius=8,
+        border_color=BORDER_COLOR,
+        border_width=1,
+        corner_radius=10,
     )
 
 
@@ -48,10 +54,11 @@ def aplicar_mascara_fixa(event):
 
     if len(numeros) <= 2:
         texto = numeros
-    elif len(numeros) <= 7:
-        texto = f"({numeros[:2]}) {numeros[2:]}"
     else:
-        texto = f"({numeros[:2]}) {numeros[2:7]}-{numeros[7:]}"
+        restante = numeros[2:]
+        texto = f"({numeros[:2]}) {restante}"
+        if len(restante) > 4:
+            texto = f"({numeros[:2]}) {restante[:-4]}-{restante[-4:]}"
 
     entry.delete(0, "end")
     entry.insert(0, texto)
@@ -111,7 +118,9 @@ def abrir_whatsapp(telefone):
     if not numero:
         return
 
-    if not numero.startswith("55"):
+    # Números nacionais têm 10 ou 11 dígitos. Só considera o 55
+    # como código do Brasil quando ele realmente veio junto do número.
+    if not (numero.startswith("55") and len(numero) in (12, 13)):
         numero = "55" + numero
 
     webbrowser.open(f"https://wa.me/{numero}")
@@ -133,9 +142,9 @@ def criar_popup(master, titulo, largura, altura):
     card = ctk.CTkFrame(
         janela,
         fg_color=CARD_COLOR,
-        corner_radius=18,
+        corner_radius=16,
         border_width=1,
-        border_color="#303030",
+        border_color=BORDER_COLOR,
     )
     card.pack(fill="both", expand=True, padx=22, pady=22)
 
@@ -160,11 +169,11 @@ def criar_bloco_info(
     ctk.CTkLabel(
         frame,
         text=titulo,
-        font=("Arial", 10, "bold"),
+        font=(FONT_FAMILY, 11, "bold"),
         text_color=TEXT_MUTED,
     ).pack(anchor="w", padx=15, pady=(11, 2))
 
-    fonte = ("Arial", 16, "bold") if destaque else ("Arial", 14)
+    fonte = (FONT_FAMILY, 16, "bold") if destaque else (FONT_FAMILY, 14)
 
     ctk.CTkLabel(
         frame,

@@ -1,9 +1,11 @@
 import customtkinter as ctk
 
 from view.config import (
+    BORDER_COLOR,
     BRAND_GREEN,
     BRAND_RED,
     CARD_COLOR,
+    FONT_FAMILY,
     INPUT_BG,
     TEXT_MUTED,
     abrir_whatsapp,
@@ -19,7 +21,6 @@ class AbaHistorico(ctk.CTkFrame):
     def __init__(self, master, controller):
         super().__init__(master, fg_color="transparent")
         self.controller = controller
-        self._draw_id = 0
         self.montar_ui()
 
     def montar_ui(self):
@@ -53,7 +54,7 @@ class AbaHistorico(ctk.CTkFrame):
         botoes = ctk.CTkFrame(topo, fg_color="transparent")
         botoes.pack(side="right")
 
-        ctk.CTkButton(
+        self.btn_pdf = ctk.CTkButton(
             botoes,
             text="Exportar PDF",
             width=125,
@@ -61,9 +62,10 @@ class AbaHistorico(ctk.CTkFrame):
             fg_color="#D32F2F",
             hover_color="#9A0007",
             command=self.controller.exportar_pdf,
-        ).pack(side="left", padx=5)
+        )
+        self.btn_pdf.pack(side="left", padx=5)
 
-        ctk.CTkButton(
+        self.btn_csv = ctk.CTkButton(
             botoes,
             text="Exportar CSV",
             width=125,
@@ -71,12 +73,28 @@ class AbaHistorico(ctk.CTkFrame):
             fg_color="#1E6E43",
             hover_color="#154D2F",
             command=self.controller.exportar_excel,
-        ).pack(side="left")
+        )
+        self.btn_csv.pack(side="left")
 
         self.scroll_hist = ctk.CTkScrollableFrame(
             self,
             fg_color="transparent",
         )
+
+        self.lbl_total = ctk.CTkLabel(
+            topo,
+            text="",
+            font=(FONT_FAMILY, 12),
+            text_color=TEXT_MUTED,
+        )
+        self.lbl_total.pack(side="left", padx=4)
+        self.lbl_carregando = ctk.CTkLabel(
+            topo,
+            text="",
+            font=(FONT_FAMILY, 12, "bold"),
+            text_color=BRAND_GREEN,
+        )
+        self.lbl_carregando.pack(side="left", padx=8)
         self.scroll_hist.pack(
             pady=5,
             padx=20,
@@ -98,14 +116,14 @@ class AbaHistorico(ctk.CTkFrame):
         ctk.CTkLabel(
             topo,
             text=f"PEDIDO #{pedido.get('id', '')}",
-            font=("Arial", 12, "bold"),
+            font=(FONT_FAMILY, 12, "bold"),
             text_color=BRAND_GREEN,
         ).pack(anchor="w")
 
         ctk.CTkLabel(
             topo,
             text=pedido.get("nome_cliente") or "Cliente não informado",
-            font=("Arial", 24, "bold"),
+            font=(FONT_FAMILY, 24, "bold"),
         ).pack(anchor="w", pady=(3, 0))
 
         contato = ctk.CTkFrame(
@@ -127,14 +145,14 @@ class AbaHistorico(ctk.CTkFrame):
         ctk.CTkLabel(
             textos,
             text="TELEFONE",
-            font=("Arial", 10, "bold"),
+            font=(FONT_FAMILY, 10, "bold"),
             text_color=TEXT_MUTED,
         ).pack(anchor="w")
 
         ctk.CTkLabel(
             textos,
             text=formatar_telefone(pedido.get("telefone", "")),
-            font=("Arial", 16, "bold"),
+            font=(FONT_FAMILY, 16, "bold"),
         ).pack(anchor="w", pady=(2, 0))
 
         ctk.CTkButton(
@@ -192,21 +210,33 @@ class AbaHistorico(ctk.CTkFrame):
         ctk.CTkLabel(
             self.scroll_hist,
             text=titulo,
-            font=("Arial", 16),
+            font=(FONT_FAMILY, 16),
             text_color=TEXT_MUTED,
         ).pack(pady=(70, 8))
 
         ctk.CTkLabel(
             self.scroll_hist,
             text=subtitulo,
-            font=("Arial", 13),
+            font=(FONT_FAMILY, 13),
             text_color="#777777",
         ).pack()
 
+    def set_carregando(self, carregando):
+        estado = "disabled" if carregando else "readonly"
+        self.combo_tipo.configure(state=estado)
+        self.combo_filtro.configure(state=estado)
+        self.btn_pdf.configure(state="disabled" if carregando else "normal")
+        self.btn_csv.configure(state="disabled" if carregando else "normal")
+        self.lbl_carregando.configure(
+            text="Atualizando..." if carregando else ""
+        )
+
     def desenhar_entregas(self, historico):
-        self._draw_id += 1
-        desenho_atual = self._draw_id
         self._limpar()
+        quantidade = len(historico)
+        self.lbl_total.configure(
+            text=f"{quantidade} resultado" if quantidade == 1 else f"{quantidade} resultados"
+        )
 
         if not historico:
             self._mostrar_vazio(
@@ -215,15 +245,13 @@ class AbaHistorico(ctk.CTkFrame):
             )
             return
 
-        def animar(index):
-            if desenho_atual != self._draw_id or index >= len(historico):
-                return
-
-            entrega = historico[index]
+        for entrega in historico:
             card = ctk.CTkFrame(
                 self.scroll_hist,
                 fg_color=CARD_COLOR,
                 corner_radius=10,
+                border_width=1,
+                border_color=BORDER_COLOR,
             )
             card.pack(fill="x", pady=4, padx=10)
 
@@ -257,7 +285,7 @@ class AbaHistorico(ctk.CTkFrame):
                     f"{entrega.get('nome_cliente', '')}   "
                     f"{entrega.get('data_formatada', 'N/A')}"
                 ),
-                font=("Arial", 15, "bold"),
+                font=(FONT_FAMILY, 15, "bold"),
                 anchor="w",
             ).pack(fill="x")
 
@@ -267,7 +295,7 @@ class AbaHistorico(ctk.CTkFrame):
                     f"{str(entrega.get('status', '')).upper()}  •  "
                     f"{entrega.get('conteudo', '')}"
                 ),
-                font=("Arial", 13),
+                font=(FONT_FAMILY, 13),
                 text_color=TEXT_MUTED,
                 anchor="w",
                 wraplength=1100,
@@ -284,14 +312,12 @@ class AbaHistorico(ctk.CTkFrame):
                 command=lambda ped=entrega: self.abrir_detalhes(ped),
             ).pack(side="right", padx=12)
 
-            self.after(8, lambda: animar(index + 1))
-
-        animar(0)
-
     def desenhar_log(self, cadastros):
-        self._draw_id += 1
-        desenho_atual = self._draw_id
         self._limpar()
+        quantidade = len(cadastros)
+        self.lbl_total.configure(
+            text=f"{quantidade} resultado" if quantidade == 1 else f"{quantidade} resultados"
+        )
 
         if not cadastros:
             self._mostrar_vazio(
@@ -300,15 +326,13 @@ class AbaHistorico(ctk.CTkFrame):
             )
             return
 
-        def animar(index):
-            if desenho_atual != self._draw_id or index >= len(cadastros):
-                return
-
-            cadastro = cadastros[index]
+        for cadastro in cadastros:
             card = ctk.CTkFrame(
                 self.scroll_hist,
                 fg_color=CARD_COLOR,
                 corner_radius=10,
+                border_width=1,
+                border_color=BORDER_COLOR,
             )
             card.pack(fill="x", pady=4, padx=10)
 
@@ -335,7 +359,7 @@ class AbaHistorico(ctk.CTkFrame):
                     f"{cadastro.get('nome', '')}   "
                     f"{cadastro.get('data_formatada', 'N/A')}"
                 ),
-                font=("Arial", 15, "bold"),
+                font=(FONT_FAMILY, 15, "bold"),
                 anchor="w",
             ).pack(fill="x")
 
@@ -346,13 +370,9 @@ class AbaHistorico(ctk.CTkFrame):
                     f"{formatar_telefone(cadastro.get('telefone', ''))}"
                     f"  •  {formatar_endereco(cadastro)}"
                 ),
-                font=("Arial", 13),
+                font=(FONT_FAMILY, 13),
                 text_color=TEXT_MUTED,
                 anchor="w",
                 wraplength=1100,
                 justify="left",
             ).pack(fill="x", pady=(3, 0))
-
-            self.after(8, lambda: animar(index + 1))
-
-        animar(0)

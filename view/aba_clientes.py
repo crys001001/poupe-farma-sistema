@@ -1,12 +1,14 @@
 import customtkinter as ctk
 
 from view.config import (
+    BORDER_COLOR,
     BRAND_GREEN,
     BRAND_GREEN_HOVER,
     BRAND_RED,
     BRAND_RED_HOVER,
     BRAND_YELLOW,
     CARD_COLOR,
+    FONT_FAMILY,
     INPUT_BG,
     TEXT_MUTED,
     abrir_whatsapp,
@@ -23,6 +25,7 @@ class AbaClientes(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent")
         self.controller = controller
         self._draw_id = 0
+        self._filtro_after = None
         self.montar_ui()
 
     def montar_ui(self):
@@ -42,8 +45,16 @@ class AbaClientes(ctk.CTkFrame):
         )
         self.entry_pesquisa.bind(
             "<KeyRelease>",
-            self.controller.filtrar_clientes,
+            self.agendar_filtro,
         )
+
+        self.lbl_total = ctk.CTkLabel(
+            topo,
+            text="0 clientes",
+            font=(FONT_FAMILY, 12),
+            text_color=TEXT_MUTED,
+        )
+        self.lbl_total.pack(side="left", padx=10)
 
         ctk.CTkButton(
             topo,
@@ -51,7 +62,7 @@ class AbaClientes(ctk.CTkFrame):
             command=self.controller.carregar_clientes,
             width=130,
             height=50,
-            font=("Arial", 14, "bold"),
+            font=(FONT_FAMILY, 14, "bold"),
             fg_color="#444444",
             hover_color="#333333",
         ).pack(side="right")
@@ -69,6 +80,11 @@ class AbaClientes(ctk.CTkFrame):
 
     def get_pesquisa(self):
         return self.entry_pesquisa.get().strip().lower()
+
+    def agendar_filtro(self, _event=None):
+        if self._filtro_after:
+            self.after_cancel(self._filtro_after)
+        self._filtro_after = self.after(160, self.controller.filtrar_clientes)
 
     @staticmethod
     def _valor(valor):
@@ -88,14 +104,14 @@ class AbaClientes(ctk.CTkFrame):
         ctk.CTkLabel(
             topo,
             text="CLIENTE",
-            font=("Arial", 12, "bold"),
+            font=(FONT_FAMILY, 12, "bold"),
             text_color=BRAND_GREEN,
         ).pack(anchor="w")
 
         ctk.CTkLabel(
             topo,
             text=self._valor(cliente.get("nome")),
-            font=("Arial", 25, "bold"),
+            font=(FONT_FAMILY, 25, "bold"),
         ).pack(anchor="w", pady=(3, 0))
 
         contato = ctk.CTkFrame(
@@ -117,14 +133,14 @@ class AbaClientes(ctk.CTkFrame):
         ctk.CTkLabel(
             textos,
             text="TELEFONE",
-            font=("Arial", 10, "bold"),
+            font=(FONT_FAMILY, 10, "bold"),
             text_color=TEXT_MUTED,
         ).pack(anchor="w")
 
         ctk.CTkLabel(
             textos,
             text=formatar_telefone(cliente.get("telefone", "")),
-            font=("Arial", 17, "bold"),
+            font=(FONT_FAMILY, 17, "bold"),
         ).pack(anchor="w", pady=(2, 0))
 
         ctk.CTkButton(
@@ -134,7 +150,7 @@ class AbaClientes(ctk.CTkFrame):
             height=38,
             fg_color="#25D366",
             hover_color="#128C7E",
-            font=("Arial", 13, "bold"),
+            font=(FONT_FAMILY, 13, "bold"),
             command=lambda: abrir_whatsapp(cliente.get("telefone", "")),
         ).pack(side="right", padx=14)
 
@@ -159,7 +175,7 @@ class AbaClientes(ctk.CTkFrame):
             height=42,
             fg_color="#444444",
             hover_color="#333333",
-            font=("Arial", 14, "bold"),
+            font=(FONT_FAMILY, 14, "bold"),
             command=janela.destroy,
         ).pack(pady=(18, 22))
 
@@ -174,7 +190,7 @@ class AbaClientes(ctk.CTkFrame):
         ctk.CTkLabel(
             card,
             text="Editar cliente",
-            font=("Arial", 26, "bold"),
+            font=(FONT_FAMILY, 26, "bold"),
             text_color=BRAND_GREEN,
         ).pack(pady=(24, 3))
 
@@ -184,14 +200,14 @@ class AbaClientes(ctk.CTkFrame):
         ctk.CTkLabel(
             telefone,
             text="TELEFONE CADASTRADO",
-            font=("Arial", 10, "bold"),
+            font=(FONT_FAMILY, 10, "bold"),
             text_color=TEXT_MUTED,
         ).pack(anchor="w", padx=14, pady=(10, 0))
 
         ctk.CTkLabel(
             telefone,
             text=formatar_telefone(cliente.get("telefone", "")),
-            font=("Arial", 16, "bold"),
+            font=(FONT_FAMILY, 16, "bold"),
         ).pack(anchor="w", padx=14, pady=(2, 10))
 
         formulario = ctk.CTkFrame(card, fg_color="transparent")
@@ -201,7 +217,7 @@ class AbaClientes(ctk.CTkFrame):
             ctk.CTkLabel(
                 formulario,
                 text=titulo,
-                font=("Arial", 12, "bold"),
+                font=(FONT_FAMILY, 12, "bold"),
             ).pack(anchor="w")
 
             entrada = criar_input(formulario, placeholder, 590)
@@ -243,7 +259,7 @@ class AbaClientes(ctk.CTkFrame):
         ctk.CTkLabel(
             formulario,
             text="Desejo / Faltou na loja (opcional)",
-            font=("Arial", 12, "bold"),
+            font=(FONT_FAMILY, 12, "bold"),
             text_color=BRAND_YELLOW,
         ).pack(anchor="w")
 
@@ -255,7 +271,7 @@ class AbaClientes(ctk.CTkFrame):
             formulario,
             text="",
             text_color=BRAND_RED,
-            font=("Arial", 12, "bold"),
+            font=(FONT_FAMILY, 12, "bold"),
         )
         lbl_erro.pack()
 
@@ -305,7 +321,7 @@ class AbaClientes(ctk.CTkFrame):
             height=48,
             fg_color=BRAND_GREEN,
             hover_color=BRAND_GREEN_HOVER,
-            font=("Arial", 15, "bold"),
+            font=(FONT_FAMILY, 15, "bold"),
             command=salvar,
         ).pack(
             side="left",
@@ -320,14 +336,14 @@ class AbaClientes(ctk.CTkFrame):
         ctk.CTkLabel(
             self.scroll_lista,
             text=texto,
-            font=("Arial", 16),
+            font=(FONT_FAMILY, 16),
             text_color=TEXT_MUTED,
         ).pack(pady=(70, 8))
 
         ctk.CTkLabel(
             self.scroll_lista,
             text="Cadastre um cliente ou altere a pesquisa.",
-            font=("Arial", 13),
+            font=(FONT_FAMILY, 13),
             text_color="#777777",
         ).pack()
 
@@ -337,6 +353,11 @@ class AbaClientes(ctk.CTkFrame):
 
         for widget in self.scroll_lista.winfo_children():
             widget.destroy()
+
+        quantidade = len(lista)
+        self.lbl_total.configure(
+            text=f"{quantidade} cliente" if quantidade == 1 else f"{quantidade} clientes"
+        )
 
         if not lista:
             self._mostrar_vazio("Nenhum cliente encontrado.")
@@ -351,6 +372,8 @@ class AbaClientes(ctk.CTkFrame):
                 self.scroll_lista,
                 fg_color=CARD_COLOR,
                 corner_radius=12,
+                border_width=1,
+                border_color=BORDER_COLOR,
             )
             card.pack(fill="x", pady=5, padx=10)
 
@@ -366,7 +389,7 @@ class AbaClientes(ctk.CTkFrame):
             ctk.CTkLabel(
                 info,
                 text=cliente.get("nome", "Sem nome"),
-                font=("Arial", 17, "bold"),
+                font=(FONT_FAMILY, 17, "bold"),
             ).pack(anchor="w")
 
             ctk.CTkLabel(
@@ -375,7 +398,7 @@ class AbaClientes(ctk.CTkFrame):
                     f"Telefone: {formatar_telefone(cliente.get('telefone', ''))}"
                     f"   |   {formatar_endereco(cliente)}"
                 ),
-                font=("Arial", 13),
+                font=(FONT_FAMILY, 13),
                 text_color=TEXT_MUTED,
                 wraplength=900,
                 justify="left",
@@ -385,7 +408,7 @@ class AbaClientes(ctk.CTkFrame):
                 ctk.CTkLabel(
                     info,
                     text=f"Faltou na loja: {cliente['produto_desejo']}",
-                    font=("Arial", 13, "italic"),
+                    font=(FONT_FAMILY, 13, "italic"),
                     text_color=BRAND_YELLOW,
                 ).pack(anchor="w", pady=(2, 0))
 

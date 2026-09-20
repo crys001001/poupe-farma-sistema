@@ -1,1 +1,1 @@
-"""Modelos e comunicação com a API do Poupe Farma."""
+"""Modelos e comunicação com a API do Sistema de Cadastro."""

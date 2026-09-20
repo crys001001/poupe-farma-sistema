@@ -1,23 +1,55 @@
 from __future__ import annotations
 
+from configparser import ConfigParser
 import os
+from pathlib import Path
+import sys
 from typing import Any
 from urllib.parse import quote
 
 import requests
 
 
-URL_API = os.getenv(
-    "POUPE_FARMA_API_URL",
-    "http://100.110.221.91:8000",
-).rstrip("/")
+URL_API_PADRAO = "http://127.0.0.1:8000"
+
+
+def pasta_aplicacao() -> Path:
+    """Pasta editável ao lado do EXE ou raiz do projeto em desenvolvimento."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+def carregar_url_api() -> str:
+    """Lê a URL pela variável de ambiente ou pelo config.ini do aplicativo."""
+    url_ambiente = os.getenv("POUPE_FARMA_API_URL", "").strip()
+    if url_ambiente:
+        return url_ambiente.rstrip("/")
+
+    arquivo = pasta_aplicacao() / "config.ini"
+    parser = ConfigParser(interpolation=None)
+    try:
+        parser.read(arquivo, encoding="utf-8")
+        url_configurada = parser.get("api", "url", fallback="").strip()
+    except (OSError, ValueError):
+        url_configurada = ""
+
+    return (url_configurada or URL_API_PADRAO).rstrip("/")
+
+
+URL_API = carregar_url_api()
 
 TIMEOUT_CONEXAO = 5
 TIMEOUT_RESPOSTA = 15
 
+ERRO_MODULO_AFERICAO = (
+    "Módulo de aferição indisponível no servidor. "
+    "Atualize a API e aplique a migration da tabela afericoes_pressao."
+)
+
 
 class ErroAPI(Exception):
-    """Erro tratado ao comunicar com a API do Poupe Farma."""
+    """Erro tratado ao comunicar com a API do Sistema de Cadastro."""
 
     def __init__(self, mensagem: str, status_code: int | None = None):
         super().__init__(mensagem)
@@ -85,6 +117,18 @@ class FarmaciaAPI:
             detalhe = dados.get("detail")
             if isinstance(detalhe, str):
                 return detalhe
+            if isinstance(detalhe, list):
+                mensagens = []
+                for item in detalhe:
+                    if not isinstance(item, dict):
+                        continue
+                    mensagem = str(item.get("msg") or "").strip()
+                    if mensagem.lower().startswith("value error,"):
+                        mensagem = mensagem.split(",", 1)[1].strip()
+                    if mensagem and mensagem not in mensagens:
+                        mensagens.append(mensagem)
+                if mensagens:
+                    return "Dados inválidos: " + "; ".join(mensagens) + "."
 
             mensagem = dados.get("mensagem")
             if isinstance(mensagem, str):
@@ -111,11 +155,15 @@ class FarmaciaAPI:
     def listar_clientes(self) -> list[dict[str, Any]]:
         return self._requisicao("GET", "/api/clientes") or []
 
-    def listar_logs_clientes(self, filtro: str = "tudo") -> list[dict[str, Any]]:
+    def listar_logs_clientes(
+        self,
+        filtro: str = "tudo",
+        limite: int = 100,
+    ) -> list[dict[str, Any]]:
         return self._requisicao(
             "GET",
             "/api/clientes/log",
-            params={"filtro": filtro},
+            params={"filtro": filtro, "limite": limite},
         ) or []
 
     def excluir_cliente(self, telefone: str) -> bool:
@@ -157,9 +205,37 @@ class FarmaciaAPI:
         )
         return True
 
-    def listar_historico(self, filtro: str = "tudo") -> list[dict[str, Any]]:
+    def listar_historico(
+        self,
+        filtro: str = "tudo",
+        limite: int = 100,
+    ) -> list[dict[str, Any]]:
         return self._requisicao(
             "GET",
             "/api/entregas/historico",
-            params={"filtro": filtro},
+            params={"filtro": filtro, "limite": limite},
         ) or []
+
+    def registrar_afericao(self, dados: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return self._requisicao(
+                "POST",
+                "/api/afericoes",
+                json=dados,
+            ) or {}
+        except ErroAPI as erro:
+            if erro.status_code == 404:
+                raise ErroAPI(ERRO_MODULO_AFERICAO, 404) from erro
+            raise
+
+    def listar_afericoes(self, filtro: str = "hoje") -> list[dict[str, Any]]:
+        try:
+            return self._requisicao(
+                "GET",
+                "/api/afericoes",
+                params={"filtro": filtro},
+            ) or []
+        except ErroAPI as erro:
+            if erro.status_code == 404:
+                raise ErroAPI(ERRO_MODULO_AFERICAO, 404) from erro
+            raise

@@ -1,12 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_data_files
+
+
+datas = collect_data_files('customtkinter')
+datas.append(('assets/final_image.png', 'assets/'))
+
+import os
+config_build = 'config.ini' if os.path.exists('config.ini') else 'config.example.ini'
+datas.append((config_build, '.'))
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets/final_image.png', 'assets/')],
-    hiddenimports=[],
+    datas=datas,
+    hiddenimports=['win32print', 'pywintypes', 'win32api'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -21,11 +30,11 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='PoupeFarma',
+    name='SistemaCadastro',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -38,7 +47,7 @@ coll = COLLECT(
     a.binaries,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
-    name='PoupeFarma',
+    name='SistemaCadastro',
 )

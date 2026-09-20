@@ -5,8 +5,8 @@ import os
 
 import pymysql
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field, model_validator
 
 
 # Carrega o .env localizado na mesma pasta deste arquivo.
@@ -17,11 +17,13 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 
-logger = logging.getLogger("poupe_farma")
+logger = logging.getLogger("sistema_cadastro")
+
+APP_VERSION = "1.2.0"
 
 app = FastAPI(
     title="API da Farmácia",
-    version="0.9.1",
+    version=APP_VERSION,
 )
 
 
@@ -99,22 +101,38 @@ def banco():
 
 
 class DadosCliente(BaseModel):
-    telefone: str
-    nome: str
-    endereco: str = ""
-    numero: str = ""
-    bairro: str = ""
-    complemento: str = ""
-    produto_desejo: str = ""
+    telefone: str = Field(max_length=20)
+    nome: str = Field(max_length=100)
+    endereco: str = Field(default="", max_length=200)
+    numero: str = Field(default="", max_length=20)
+    bairro: str = Field(default="", max_length=100)
+    complemento: str = Field(default="", max_length=150)
+    produto_desejo: str = Field(default="", max_length=255)
 
 
 class PedidoEntrega(BaseModel):
-    cliente_busca: str
-    conteudo: str
+    cliente_busca: str = Field(max_length=100)
+    conteudo: str = Field(max_length=4000)
 
 
 class EdicaoEntrega(BaseModel):
-    conteudo: str
+    conteudo: str = Field(max_length=4000)
+
+
+class AfericaoPressao(BaseModel):
+    nome_cliente: str = Field(default="", max_length=100)
+    telefone: str = Field(default="", max_length=20)
+    sistolica: int = Field(ge=30, le=300)
+    diastolica: int = Field(ge=20, le=200)
+    batimentos: int = Field(ge=20, le=300)
+
+    @model_validator(mode="after")
+    def validar_ordem_pressao(self):
+        if self.sistolica < self.diastolica:
+            raise ValueError(
+                "A pressão sistólica não pode ser menor que a diastólica."
+            )
+        return self
 
 
 # =============================================================================
@@ -135,6 +153,21 @@ def texto_obrigatorio(
         )
 
     return valor
+
+
+def normalizar_telefone(valor: str, obrigatorio: bool = False) -> str:
+    numero = "".join(filter(str.isdigit, str(valor or "")))
+
+    if not numero and not obrigatorio:
+        return ""
+
+    if len(numero) not in (10, 11):
+        raise HTTPException(
+            status_code=422,
+            detail="Informe um telefone válido com DDD.",
+        )
+
+    return numero
 
 
 def validar_filtro(filtro: str) -> str:
@@ -196,6 +229,31 @@ def periodo_sql(coluna: str, filtro: str) -> str:
 
     return ""
 
+
+def tabela_afericoes_disponivel(conexao) -> bool:
+    with conexao.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM information_schema.tables
+            WHERE table_schema = DATABASE()
+              AND table_name = 'afericoes_pressao'
+            """
+        )
+        resultado = cursor.fetchone() or {}
+    return bool(resultado.get("total"))
+
+
+def exigir_tabela_afericoes(conexao):
+    if not tabela_afericoes_disponivel(conexao):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Módulo de aferição indisponível no servidor. "
+                "Aplique a migration da tabela afericoes_pressao."
+            ),
+        )
+
 # =============================================================================
 # SAÚDE DA API
 # =============================================================================
@@ -204,7 +262,7 @@ def periodo_sql(coluna: str, filtro: str) -> str:
 @app.get("/")
 def inicio():
     return {
-        "sistema": "Poupe Farma",
+        "sistema": "Sistema de Cadastro",
         "status": "online",
         "versao": app.version,
     }
@@ -220,10 +278,15 @@ def verificar_saude():
 
             cursor.fetchone()
 
+        tabela_afericoes = tabela_afericoes_disponivel(conexao)
+
     return {
         "status": "ok",
         "banco": "conectado",
         "versao": app.version,
+        "modulos": {
+            "afericao": tabela_afericoes,
+        },
     }
 
 
@@ -234,10 +297,7 @@ def verificar_saude():
 
 @app.post("/api/clientes")
 def salvar_cliente(dados: DadosCliente):
-    telefone = texto_obrigatorio(
-        dados.telefone,
-        "telefone",
-    )
+    telefone = normalizar_telefone(dados.telefone, obrigatorio=True)
 
     nome = texto_obrigatorio(
         dados.nome,
@@ -304,6 +364,7 @@ def salvar_cliente(dados: DadosCliente):
 @app.get("/api/clientes/log")
 def log_cadastros(
     filtro: str = "tudo",
+    limite: int = Query(default=100, ge=1, le=5000),
 ):
     filtro = validar_filtro(filtro)
 
@@ -323,17 +384,17 @@ def log_cadastros(
                     data_cadastro,
                     INTERVAL 3 HOUR
                 ),
-                '%d/%m/%Y %H:%i'
+                '%%d/%%m/%%Y %%H:%%i'
             ) AS data_formatada
         FROM clientes
         WHERE {where_clause}
         ORDER BY data_cadastro DESC
-        LIMIT 100
+        LIMIT %s
     """
 
     with banco() as conexao:
         with conexao.cursor() as cursor:
-            cursor.execute(sql)
+            cursor.execute(sql, (limite,))
 
             return cursor.fetchall()
 
@@ -357,10 +418,7 @@ def listar_clientes():
 def buscar_cliente(
     telefone: str,
 ):
-    telefone = texto_obrigatorio(
-        telefone,
-        "telefone",
-    )
+    telefone = normalizar_telefone(telefone, obrigatorio=True)
 
     with banco() as conexao:
         with conexao.cursor() as cursor:
@@ -385,10 +443,7 @@ def buscar_cliente(
 def deletar_cliente(
     telefone: str,
 ):
-    telefone = texto_obrigatorio(
-        telefone,
-        "telefone",
-    )
+    telefone = normalizar_telefone(telefone, obrigatorio=True)
 
     with banco() as conexao:
         with conexao.cursor() as cursor:
@@ -414,6 +469,75 @@ def deletar_cliente(
 
 
 # =============================================================================
+# AFERIÇÕES DE PRESSÃO
+# =============================================================================
+
+
+@app.post("/api/afericoes")
+def registrar_afericao(dados: AfericaoPressao):
+    nome = dados.nome_cliente.strip()
+    telefone = normalizar_telefone(dados.telefone)
+
+    with banco() as conexao:
+        exigir_tabela_afericoes(conexao)
+        with conexao.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO afericoes_pressao
+                (nome_cliente, telefone, sistolica, diastolica, batimentos, valor)
+                VALUES (%s, %s, %s, %s, %s, 5.00)
+                """,
+                (nome, telefone, dados.sistolica, dados.diastolica, dados.batimentos),
+            )
+            id_afericao = cursor.lastrowid
+
+            cursor.execute(
+                """
+                SELECT
+                    id, nome_cliente, telefone, sistolica, diastolica,
+                    batimentos, valor,
+                    DATE_FORMAT(
+                        DATE_SUB(data_criacao, INTERVAL 3 HOUR),
+                        '%%d/%%m/%%Y %%H:%%i'
+                    ) AS data_formatada
+                FROM afericoes_pressao
+                WHERE id = %s
+                """,
+                (id_afericao,),
+            )
+            registro = cursor.fetchone()
+
+        conexao.commit()
+
+    return registro
+
+
+@app.get("/api/afericoes")
+def listar_afericoes(filtro: str = "hoje"):
+    filtro = validar_filtro(filtro)
+    where_clause = "1=1" + periodo_sql("data_criacao", filtro)
+    sql = f"""
+        SELECT
+            id, nome_cliente, telefone, sistolica, diastolica,
+            batimentos, valor,
+            DATE_FORMAT(
+                DATE_SUB(data_criacao, INTERVAL 3 HOUR),
+                '%d/%m/%Y %H:%i'
+            ) AS data_formatada
+        FROM afericoes_pressao
+        WHERE {where_clause}
+        ORDER BY id DESC
+        LIMIT 200
+    """
+
+    with banco() as conexao:
+        exigir_tabela_afericoes(conexao)
+        with conexao.cursor() as cursor:
+            cursor.execute(sql)
+            return cursor.fetchall()
+
+
+# =============================================================================
 # ENTREGAS
 # =============================================================================
 
@@ -434,36 +558,49 @@ def criar_entrega(
 
     with banco() as conexao:
         with conexao.cursor() as cursor:
+            busca_digitos = "".join(filter(str.isdigit, busca))
+            telefone_busca = busca_digitos if len(busca_digitos) in (10, 11) else busca
+
             cursor.execute(
                 """
                 SELECT *
                 FROM clientes
-                WHERE
-                    telefone = %s
-                    OR nome LIKE %s
+                WHERE telefone = %s OR nome LIKE %s
                 ORDER BY
-                    CASE
-                        WHEN telefone = %s
-                        THEN 0
-                        ELSE 1
-                    END,
+                    CASE WHEN telefone = %s THEN 0 ELSE 1 END,
                     nome ASC
-                LIMIT 1
+                LIMIT 3
                 """,
-                (
-                    busca,
-                    f"%{busca}%",
-                    busca,
-                ),
+                (telefone_busca, f"%{busca}%", telefone_busca),
             )
+            encontrados = cursor.fetchall()
 
-            cliente = cursor.fetchone()
+            if not encontrados:
+                raise HTTPException(status_code=404, detail="Cliente não encontrado.")
 
-            if not cliente:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Cliente não encontrado.",
-                )
+            exato_telefone = next(
+                (item for item in encontrados if item["telefone"] == telefone_busca),
+                None,
+            )
+            if exato_telefone:
+                cliente = exato_telefone
+            else:
+                exatos_nome = [
+                    item for item in encontrados
+                    if str(item["nome"]).strip().casefold() == busca.casefold()
+                ]
+                if len(exatos_nome) == 1:
+                    cliente = exatos_nome[0]
+                elif len(encontrados) > 1:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Mais de um cliente corresponde à busca. "
+                            "Informe o telefone para escolher o cliente correto."
+                        ),
+                    )
+                else:
+                    cliente = encontrados[0]
 
             partes_endereco = []
 
@@ -541,7 +678,17 @@ def listar_pendentes():
         with conexao.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT *
+                SELECT
+                    id,
+                    nome_cliente,
+                    telefone,
+                    endereco,
+                    conteudo,
+                    status,
+                    DATE_FORMAT(
+                        DATE_SUB(data_criacao, INTERVAL 3 HOUR),
+                        '%d/%m/%Y %H:%i'
+                    ) AS data_formatada
                 FROM entregas
                 WHERE status = 'Pendente'
                 ORDER BY id ASC
@@ -554,6 +701,7 @@ def listar_pendentes():
 @app.get("/api/entregas/historico")
 def listar_historico(
     filtro: str = "tudo",
+    limite: int = Query(default=100, ge=1, le=5000),
 ):
     filtro = validar_filtro(filtro)
 
@@ -578,17 +726,17 @@ def listar_historico(
                     data_criacao,
                     INTERVAL 3 HOUR
                 ),
-                '%d/%m/%Y %H:%i'
+                '%%d/%%m/%%Y %%H:%%i'
             ) AS data_formatada
         FROM entregas
         WHERE {where_clause}
         ORDER BY id DESC
-        LIMIT 100
+        LIMIT %s
     """
 
     with banco() as conexao:
         with conexao.cursor() as cursor:
-            cursor.execute(sql)
+            cursor.execute(sql, (limite,))
 
             return cursor.fetchall()
 

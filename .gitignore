@@ -113,3 +113,5 @@ desktop.ini
 *.db
 *.sqlite
 *.sqlite3
+# Configuração local da API
+config.ini

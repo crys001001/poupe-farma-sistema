@@ -1,9 +1,12 @@
 import customtkinter as ctk
 
 from view.config import (
+    BORDER_COLOR,
     BRAND_GREEN,
     BRAND_GREEN_HOVER,
     CARD_COLOR,
+    FONT_FAMILY,
+    TEXT_MUTED,
     aplicar_mascara_fixa,
     criar_input,
 )
@@ -21,17 +24,30 @@ class AbaCadastro(ctk.CTkFrame):
             self,
             width=820,
             fg_color=CARD_COLOR,
-            corner_radius=18,
+            corner_radius=16,
             border_width=1,
-            border_color="#292929",
+            border_color=BORDER_COLOR,
         )
-        centro.pack(pady=(32, 20), padx=30)
+        centro.pack(pady=(18, 20), padx=70, fill="x")
+
+        ctk.CTkLabel(
+            centro,
+            text="CADASTRO RÁPIDO",
+            font=(FONT_FAMILY, 11, "bold"),
+            text_color=BRAND_GREEN,
+        ).pack(pady=(26, 2))
 
         ctk.CTkLabel(
             centro,
             text="Ficha do Cliente",
-            font=("Arial", 32, "bold"),
-        ).pack(pady=(28, 14))
+            font=(FONT_FAMILY, 28, "bold"),
+        ).pack()
+        ctk.CTkLabel(
+            centro,
+            text="Telefone e nome são obrigatórios. O endereço pode ficar em branco.",
+            font=(FONT_FAMILY, 13),
+            text_color=TEXT_MUTED,
+        ).pack(pady=(4, 16))
 
         linha_telefone = ctk.CTkFrame(centro, fg_color="transparent")
         linha_telefone.pack(pady=(8, 6), padx=40, fill="x")
@@ -58,7 +74,7 @@ class AbaCadastro(ctk.CTkFrame):
             text="Buscar",
             width=135,
             height=50,
-            font=("Arial", 16, "bold"),
+            font=(FONT_FAMILY, 15, "bold"),
             fg_color="#444444",
             hover_color="#333333",
             corner_radius=8,
@@ -98,17 +114,33 @@ class AbaCadastro(ctk.CTkFrame):
         )
         self.entry_desejo.pack(pady=7, padx=40, fill="x")
 
+        acoes = ctk.CTkFrame(centro, fg_color="transparent")
+        acoes.pack(pady=(18, 10), padx=40, fill="x")
+
+        ctk.CTkButton(
+            acoes,
+            text="Limpar",
+            width=130,
+            height=54,
+            font=(FONT_FAMILY, 14, "bold"),
+            fg_color="#303A34",
+            hover_color="#3B4840",
+            corner_radius=10,
+            command=self.limpar,
+        ).pack(side="left", padx=(0, 10))
+
         self.btn_salvar = ctk.CTkButton(
-            centro,
+            acoes,
             text="Salvar Cadastro",
-            height=58,
-            font=("Arial", 19, "bold"),
+            height=54,
+            font=(FONT_FAMILY, 17, "bold"),
             fg_color=BRAND_GREEN,
             hover_color=BRAND_GREEN_HOVER,
-            corner_radius=9,
+            text_color="#081006",
+            corner_radius=10,
             command=self.controller.salvar_cliente,
         )
-        self.btn_salvar.pack(pady=(20, 30), padx=40, fill="x")
+        self.btn_salvar.pack(side="left", expand=True, fill="x")
 
         self.lbl_status = ctk.CTkLabel(
             centro,
@@ -116,8 +148,9 @@ class AbaCadastro(ctk.CTkFrame):
             height=34,
             corner_radius=8,
             text_color="white",
-            font=("Arial", 13, "bold"),
+            font=(FONT_FAMILY, 13, "bold"),
         )
+        self.lbl_status.pack(fill="x", padx=40, pady=(0, 22))
 
     def get_dados(self):
         return {
@@ -163,6 +196,10 @@ class AbaCadastro(ctk.CTkFrame):
     def limpar(self):
         self.entry_telefone.delete(0, "end")
         self.limpar_dados()
+        self.entry_telefone.focus_set()
+
+    def focar_nome(self):
+        self.entry_nome.focus_set()
 
     def mostrar_status(self, mensagem, cor):
         if self._status_after:
@@ -172,13 +209,12 @@ class AbaCadastro(ctk.CTkFrame):
                 pass
 
         if not mensagem:
-            self.lbl_status.place_forget()
+            self.lbl_status.configure(text="", fg_color="transparent")
             return
 
         self.lbl_status.configure(text=mensagem, fg_color=cor)
-        self.lbl_status.place(relx=0.5, rely=0.975, anchor="s")
 
         self._status_after = self.after(
             2800,
-            self.lbl_status.place_forget,
+            lambda: self.lbl_status.configure(text="", fg_color="transparent"),
         )
